@@ -266,20 +266,26 @@ QString MessageFormatter::formatNoticeMessage(IrcNoticeMessage* message, Qt::Tex
     if (message->isReply()) {
         const QStringList params = message->content().split(" ", QString::SkipEmptyParts);
         const QString cmd = params.value(0);
-        const QString arg = params.value(1);
-        if (cmd.toUpper() == "PING")
-            return formatPingReply(message->nick(), arg, format);
-        else if (cmd.toUpper() == "TIME")
-            return QCoreApplication::translate("MessageFormatter", "%1 time is %2").arg(formatNick(message->nick(), format), QStringList(params.mid(1)).join(" "));
-        else if (cmd.toUpper() == "VERSION")
-            return QCoreApplication::translate("MessageFormatter", "%1 version is %2").arg(formatNick(message->nick(), format), QStringList(params.mid(1)).join(" "));
+        QString arg = params.value(1);
+        if (cmd.toUpper() == "PING") {
+            bool ok;
+            int seconds = arg.toInt(&ok);
+            if (ok) {
+                QDateTime time = QDateTime::fromTime_t(seconds);
+                arg = QCoreApplication::translate("MessageFormatter", "%1s").arg(time.secsTo(QDateTime::currentDateTime()));
+            }
+        }
+        return QCoreApplication::translate("MessageFormatter", "%1 replied CTCP %2: %3").arg(formatNick(message->nick(), format), cmd, QStringList(params.mid(1)).join(" "));
     }
 
     const QString sender = formatNick(message->nick(), format, message->isOwn());
     const QString msg = formatContent(message->content(), format);
-    if (format == Qt::RichText)
-        return QCoreApplication::translate("MessageFormatter", "[%1] %2").arg(sender, msg);
-    return msg;
+    if (format == Qt::PlainText)
+        return msg;
+    QString pfx = message->statusPrefix();
+    if (!pfx.isEmpty())
+        pfx.append(" ");
+    return QCoreApplication::translate("MessageFormatter", "%1[%2] %3").arg(pfx, sender, msg);
 }
 
 #define P_(x) message->parameters().value(x)
@@ -387,10 +393,13 @@ QString MessageFormatter::formatPrivateMessage(IrcPrivateMessage* message, Qt::T
     if (message->isAction())
         return QCoreApplication::translate("MessageFormatter", "%1 %2").arg(message->nick(), msg);
     else if (message->isRequest())
-        return QCoreApplication::translate("MessageFormatter", "%1 requested %2").arg(sender, msg.split(" ").value(0).toLower());
-    else if (format == Qt::RichText)
-        return QCoreApplication::translate("MessageFormatter", "%1: %2").arg(sender, msg);
-    return msg;
+        return QCoreApplication::translate("MessageFormatter", "%1 requested CTCP %2").arg(sender, msg.split(" ").value(0).toLower());
+    else if (format == Qt::PlainText)
+        return msg;
+    QString pfx = message->statusPrefix();
+    if (!pfx.isEmpty())
+        pfx.append(" ");
+    return QCoreApplication::translate("MessageFormatter", "%1%2: %3").arg(pfx, sender, msg);
 }
 
 QString MessageFormatter::formatQuitMessage(IrcQuitMessage* message, Qt::TextFormat format) const
